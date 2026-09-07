@@ -7,6 +7,7 @@ import android.content.ContentValues;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.Color;
+import android.graphics.Insets;
 import android.graphics.drawable.GradientDrawable;
 import android.media.MediaRecorder;
 import android.net.Uri;
@@ -19,6 +20,7 @@ import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.Surface;
 import android.view.View;
+import android.view.WindowInsets;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.FrameLayout;
@@ -94,7 +96,14 @@ public final class MainActivity extends Activity implements CameraController.Lis
     private void buildUi() {
         FrameLayout root = new FrameLayout(this);
         root.setBackgroundColor(Color.BLACK);
+        root.setOnApplyWindowInsetsListener((view, insets) -> {
+            Insets status = insets.getInsets(WindowInsets.Type.statusBars());
+            Insets navigation = insets.getInsets(WindowInsets.Type.navigationBars());
+            view.setPadding(0, status.top, 0, navigation.bottom);
+            return insets;
+        });
         setContentView(root);
+        root.requestApplyInsets();
 
         AspectRatioFrameLayout previewHolder = new AspectRatioFrameLayout(this);
         FrameLayout.LayoutParams previewParams = new FrameLayout.LayoutParams(

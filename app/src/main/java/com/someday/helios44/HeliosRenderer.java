@@ -63,9 +63,9 @@ final class HeliosRenderer implements GLSurfaceView.Renderer {
             "\n" +
             "vec2 orientUv(vec2 uv){\n" +
             "  vec2 q = uv;\n" +
-            "  if (uRotation > 0.5 && uRotation < 1.5) q = vec2(uv.y, 1.0 - uv.x);\n" +
+            "  if (uRotation > 0.5 && uRotation < 1.5) q = vec2(1.0 - uv.y, uv.x);\n" +
             "  else if (uRotation >= 1.5 && uRotation < 2.5) q = vec2(1.0 - uv.x, 1.0 - uv.y);\n" +
-            "  else if (uRotation >= 2.5) q = vec2(1.0 - uv.y, uv.x);\n" +
+            "  else if (uRotation >= 2.5) q = vec2(uv.y, 1.0 - uv.x);\n" +
             "  if (uMirror > 0.5) q.x = 1.0 - q.x;\n" +
             "  return q;\n" +
             "}\n" +
@@ -77,41 +77,46 @@ final class HeliosRenderer implements GLSurfaceView.Renderer {
             "  return texture2D(uTexture, t.xy);\n" +
             "}\n" +
             "\n" +
-            "vec2 swirlUv(vec2 uv, float amount, float mask, float radius){\n" +
+            "vec2 bokehUv(vec2 uv, float amount, float span){\n" +
             "  vec2 p = uv - uCenter;\n" +
-            "  vec2 a = vec2(p.x * uAspect, p.y);\n" +
-            "  float theta = amount * (0.028 + 0.135 * uStrength) * mask * (0.35 + radius);\n" +
-            "  float c = cos(theta);\n" +
-            "  float s = sin(theta);\n" +
-            "  vec2 r = vec2(a.x*c - a.y*s, a.x*s + a.y*c);\n" +
-            "  r *= 1.0 + amount * 0.012 * uStrength * mask;\n" +
-            "  r.x /= uAspect;\n" +
-            "  return uCenter + r;\n" +
+            "  vec2 pa = vec2(p.x * uAspect, p.y);\n" +
+            "  float radius = max(length(pa), 0.0001);\n" +
+            "  vec2 radial = pa / radius;\n" +
+            "  vec2 tangent = vec2(-radial.y, radial.x);\n" +
+            "  vec2 tangentUv = vec2(tangent.x / max(uAspect, 0.001), tangent.y);\n" +
+            "  vec2 radialUv = vec2(radial.x / max(uAspect, 0.001), radial.y);\n" +
+            "  float bend = amount * amount * span * 0.10;\n" +
+            "  return uv + tangentUv * (amount * span) - radialUv * bend;\n" +
             "}\n" +
             "\n" +
             "void main(){\n" +
             "  vec2 p = vUv - uCenter;\n" +
             "  vec2 pa = vec2(p.x * uAspect, p.y);\n" +
             "  float r = length(pa);\n" +
-            "  float edge = min(0.92, uSharp + 0.34);\n" +
+            "  float edge = min(0.62, uSharp + 0.24);\n" +
             "  float mask = smoothstep(uSharp, edge, r);\n" +
             "  vec4 base = cameraSample(vUv);\n" +
             "\n" +
-            "  vec4 acc = base * 0.28;\n" +
-            "  acc += cameraSample(swirlUv(vUv, -1.00, mask, r)) * 0.09;\n" +
-            "  acc += cameraSample(swirlUv(vUv, -0.72, mask, r)) * 0.12;\n" +
-            "  acc += cameraSample(swirlUv(vUv, -0.40, mask, r)) * 0.15;\n" +
-            "  acc += cameraSample(swirlUv(vUv,  0.40, mask, r)) * 0.15;\n" +
-            "  acc += cameraSample(swirlUv(vUv,  0.72, mask, r)) * 0.12;\n" +
-            "  acc += cameraSample(swirlUv(vUv,  1.00, mask, r)) * 0.09;\n" +
+            "  float field = smoothstep(0.10, 0.56, r);\n" +
+            "  float span = (0.0015 + 0.027 * uStrength) * mask * field * (0.55 + 0.95 * r);\n" +
+            "  vec4 acc = base * 0.20;\n" +
+            "  acc += cameraSample(bokehUv(vUv, -1.45, span)) * 0.09;\n" +
+            "  acc += cameraSample(bokehUv(vUv, -1.10, span)) * 0.09;\n" +
+            "  acc += cameraSample(bokehUv(vUv, -0.75, span)) * 0.10;\n" +
+            "  acc += cameraSample(bokehUv(vUv, -0.35, span)) * 0.12;\n" +
+            "  acc += cameraSample(bokehUv(vUv,  0.35, span)) * 0.12;\n" +
+            "  acc += cameraSample(bokehUv(vUv,  0.75, span)) * 0.10;\n" +
+            "  acc += cameraSample(bokehUv(vUv,  1.10, span)) * 0.09;\n" +
+            "  acc += cameraSample(bokehUv(vUv,  1.45, span)) * 0.09;\n" +
             "  vec3 blur = acc.rgb;\n" +
             "\n" +
             "  float hi = max(max(blur.r, blur.g), blur.b);\n" +
-            "  blur += max(hi - 0.72, 0.0) * 0.085 * uStrength * mask;\n" +
-            "  vec3 color = mix(base.rgb, blur, clamp(mask * uStrength * 1.08, 0.0, 0.96));\n" +
+            "  blur += vec3(max(hi - 0.68, 0.0) * 0.065 * uStrength * mask);\n" +
+            "  float blend = clamp(mask * (0.34 + 0.64 * uStrength), 0.0, 0.88);\n" +
+            "  vec3 color = mix(base.rgb, blur, blend);\n" +
             "\n" +
-            "  float vig = smoothstep(0.38, 0.92, r);\n" +
-            "  color *= 1.0 - (uVignette * 0.48) * vig * vig;\n" +
+            "  float vig = smoothstep(0.31, 0.58, r);\n" +
+            "  color *= 1.0 - (uVignette * 0.34) * vig * vig;\n" +
             "  gl_FragColor = vec4(color, 1.0);\n" +
             "}\n";
 
