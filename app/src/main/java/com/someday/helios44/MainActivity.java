@@ -71,9 +71,9 @@ public final class MainActivity extends Activity implements CameraController.Lis
         getWindow().setNavigationBarColor(Color.BLACK);
 
         renderer = new HeliosRenderer();
-        renderer.setStrength(72);
-        renderer.setSharpZone(32);
-        renderer.setVignette(28);
+        renderer.setStrength(58);
+        renderer.setSharpZone(40);
+        renderer.setVignette(18);
         renderer.setErrorListener(message -> setStatus(message));
         renderer.setCameraSurfaceListener(texture -> {
             glSurfaceReady = true;
@@ -177,15 +177,15 @@ public final class MainActivity extends Activity implements CameraController.Lis
         panel.setPadding(dp(14), dp(10), dp(14), dp(14));
         panel.setBackgroundColor(0xD9000000);
 
-        panel.addView(sliderRow("Swirl", 72, value -> {
+        panel.addView(sliderRow("Swirl", 58, value -> {
             renderer.setStrength(value);
             glView.requestRender();
         }));
-        panel.addView(sliderRow("Sharp zone", 32, value -> {
+        panel.addView(sliderRow("Sharp zone", 40, value -> {
             renderer.setSharpZone(value);
             glView.requestRender();
         }));
-        panel.addView(sliderRow("Vignette", 28, value -> {
+        panel.addView(sliderRow("Vignette", 18, value -> {
             renderer.setVignette(value);
             glView.requestRender();
         }));
