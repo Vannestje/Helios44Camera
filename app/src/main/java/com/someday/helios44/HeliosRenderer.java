@@ -71,13 +71,13 @@ final class HeliosRenderer implements GLSurfaceView.Renderer {
             "}\n" +
             "\n" +
             "vec4 cameraSample(vec2 uv){\n" +
-            "  uv = clamp(uv, vec2(0.002), vec2(0.998));\n" +
+            "  uv = clamp(uv, vec2(0.003), vec2(0.997));\n" +
             "  vec2 o = orientUv(uv);\n" +
             "  vec4 t = uStMatrix * vec4(o, 0.0, 1.0);\n" +
             "  return texture2D(uTexture, t.xy);\n" +
             "}\n" +
             "\n" +
-            "vec2 bokehUv(vec2 uv, float amount, float span){\n" +
+            "vec2 helioOffset(vec2 uv, float k, float span){\n" +
             "  vec2 p = uv - uCenter;\n" +
             "  vec2 pa = vec2(p.x * uAspect, p.y);\n" +
             "  float radius = max(length(pa), 0.0001);\n" +
@@ -85,38 +85,46 @@ final class HeliosRenderer implements GLSurfaceView.Renderer {
             "  vec2 tangent = vec2(-radial.y, radial.x);\n" +
             "  vec2 tangentUv = vec2(tangent.x / max(uAspect, 0.001), tangent.y);\n" +
             "  vec2 radialUv = vec2(radial.x / max(uAspect, 0.001), radial.y);\n" +
-            "  float bend = amount * amount * span * 0.10;\n" +
-            "  return uv + tangentUv * (amount * span) - radialUv * bend;\n" +
+            "  float curve = k * k * span * 0.10;\n" +
+            "  return uv + tangentUv * (k * span) - radialUv * curve;\n" +
             "}\n" +
             "\n" +
             "void main(){\n" +
             "  vec2 p = vUv - uCenter;\n" +
             "  vec2 pa = vec2(p.x * uAspect, p.y);\n" +
             "  float r = length(pa);\n" +
-            "  float edge = min(0.62, uSharp + 0.24);\n" +
-            "  float mask = smoothstep(uSharp, edge, r);\n" +
+            "\n" +
             "  vec4 base = cameraSample(vUv);\n" +
             "\n" +
-            "  float field = smoothstep(0.10, 0.56, r);\n" +
-            "  float span = (0.0015 + 0.027 * uStrength) * mask * field * (0.55 + 0.95 * r);\n" +
-            "  vec4 acc = base * 0.20;\n" +
-            "  acc += cameraSample(bokehUv(vUv, -1.45, span)) * 0.09;\n" +
-            "  acc += cameraSample(bokehUv(vUv, -1.10, span)) * 0.09;\n" +
-            "  acc += cameraSample(bokehUv(vUv, -0.75, span)) * 0.10;\n" +
-            "  acc += cameraSample(bokehUv(vUv, -0.35, span)) * 0.12;\n" +
-            "  acc += cameraSample(bokehUv(vUv,  0.35, span)) * 0.12;\n" +
-            "  acc += cameraSample(bokehUv(vUv,  0.75, span)) * 0.10;\n" +
-            "  acc += cameraSample(bokehUv(vUv,  1.10, span)) * 0.09;\n" +
-            "  acc += cameraSample(bokehUv(vUv,  1.45, span)) * 0.09;\n" +
-            "  vec3 blur = acc.rgb;\n" +
+            "  // Protect the tapped subject area and only build the Helios character toward the frame edge.\n" +
+            "  float start = uSharp + 0.035;\n" +
+            "  float end = min(0.56, uSharp + 0.22);\n" +
+            "  float mask = smoothstep(start, end, r);\n" +
+            "  float edgeFalloff = smoothstep(0.18, 0.50, r);\n" +
+            "  float effect = mask * edgeFalloff;\n" +
             "\n" +
+            "  // Short anisotropic arc blur: enough to bend bokeh, not enough to turn objects into streaks.\n" +
+            "  float span = (0.00055 + 0.0072 * uStrength) * effect * (0.72 + 0.72 * r);\n" +
+            "  vec4 blur = base * 0.46;\n" +
+            "  blur += cameraSample(helioOffset(vUv, -1.35, span)) * 0.055;\n" +
+            "  blur += cameraSample(helioOffset(vUv, -0.95, span)) * 0.075;\n" +
+            "  blur += cameraSample(helioOffset(vUv, -0.60, span)) * 0.090;\n" +
+            "  blur += cameraSample(helioOffset(vUv, -0.30, span)) * 0.100;\n" +
+            "  blur += cameraSample(helioOffset(vUv,  0.30, span)) * 0.100;\n" +
+            "  blur += cameraSample(helioOffset(vUv,  0.60, span)) * 0.090;\n" +
+            "  blur += cameraSample(helioOffset(vUv,  0.95, span)) * 0.075;\n" +
+            "  blur += cameraSample(helioOffset(vUv,  1.35, span)) * 0.055;\n" +
+            "\n" +
+            "  // Keep most of the real camera image. The effect should read as optical bokeh, not motion blur.\n" +
+            "  float blend = clamp(effect * (0.12 + 0.44 * uStrength), 0.0, 0.54);\n" +
+            "  vec3 color = mix(base.rgb, blur.rgb, blend);\n" +
+            "\n" +
+            "  // Slight highlight bloom toward the outside, where Helios bokeh is most obvious.\n" +
             "  float hi = max(max(blur.r, blur.g), blur.b);\n" +
-            "  blur += vec3(max(hi - 0.68, 0.0) * 0.065 * uStrength * mask);\n" +
-            "  float blend = clamp(mask * (0.34 + 0.64 * uStrength), 0.0, 0.88);\n" +
-            "  vec3 color = mix(base.rgb, blur, blend);\n" +
+            "  color += vec3(max(hi - 0.78, 0.0) * 0.032 * uStrength * effect);\n" +
             "\n" +
-            "  float vig = smoothstep(0.31, 0.58, r);\n" +
-            "  color *= 1.0 - (uVignette * 0.34) * vig * vig;\n" +
+            "  float vig = smoothstep(0.31, 0.55, r);\n" +
+            "  color *= 1.0 - (uVignette * 0.22) * vig * vig;\n" +
             "  gl_FragColor = vec4(color, 1.0);\n" +
             "}\n";
 
@@ -175,7 +183,9 @@ final class HeliosRenderer implements GLSurfaceView.Renderer {
 
     void setCameraOrientation(int sensorOrientation, boolean isFront) {
         int normalized = ((sensorOrientation % 360) + 360) % 360;
-        rotationSteps = (normalized / 90) % 4;
+        int sensorSteps = (normalized / 90) % 4;
+        // We transform texture lookup coordinates, so use the inverse of the sensor rotation.
+        rotationSteps = (4 - sensorSteps) % 4;
         mirror = isFront ? 1f : 0f;
     }
 
